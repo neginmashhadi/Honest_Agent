@@ -1,0 +1,103 @@
+# Can an Honest Agent Break Up AI Price Collusion? A Mirror of the Fishing Game in Financial Markets
+
+## Overview
+
+Large language model (LLM) agents are increasingly being deployed in socioeconomic settings, including pricing platforms, trading systems, and auction markets, where multiple agents interact with one another under competitive incentives. Recent work has demonstrated that LLM agents acting as sellers in simulated double auction markets spontaneously exhibit collusive behavior, meaning they tend to coordinate with one another to sustain artificially high prices, harming buyers, without ever being explicitly instructed to do so. This emergence of collusive behavior poses a direct risk in fintech systems where agentic AI is used for automated pricing, order routing, or market making.
+
+This proposal investigates a single question: if a group of AI agents is cheating together by fixing prices too high, can one honest agent step in and break up the scheme, and how many colluding agents can that honest agent realistically go up against before it stops working?
+
+The work builds on four sources, each contributing one piece of the puzzle:
+
+1. **Bell & Madisetti (2026)**, Prof. Madisetti's own recent paper, showed that one greedy AI agent is enough to destroy a cooperative group of agents in a shared fishing game. This proposal runs the opposite experiment: one or more honest agents going up against a group that is already cheating.
+2. **Xie et al. (2011)**, a network science study from Rensselaer Polytechnic Institute (published in *Physical Review E*), found that when just 10 percent of a population holds an unshakable belief, the majority of the society eventually adopts it, and that below that threshold the belief barely spreads at all. This gives us a concrete prediction to test against AI agents.
+3. **Jones & Kelly (2007)**, a group dynamics study, found that in small group discussions people sometimes follow whoever talks the most rather than whoever makes the best point, a pattern known as the babble effect. We test whether AI agents show the same bias.
+4. **Agrawal et al. (2025), arXiv:2507.01413**, a financial markets paper, showed that LLM seller agents in a simulated continuous double auction will start fixing prices together on their own, that this tendency grows when they are allowed to communicate, and that the propensity to collude varies across models. We adapt their market, drop in an honest agent, and measure what happens.
+
+In short, we recreate the price-fixing market, introduce one or more honest agents, measure whether the honest minority can break the scheme, check whether the human babble effect shows up in AI agents, and test whether formal enforcement rules, similar to what worked in the fishing game, can help when persuasion alone is not enough.
+
+## The Main Question
+
+A group of AI agents can spontaneously fix prices together in a financial market. Can a single honest agent, using strong arguments and competitive pricing, break up that group, and how many colluding agents can one honest agent realistically go up against before it stops working?
+
+## Background and Related Work
+
+This proposal sits at the intersection of three lines of work that have not yet been connected.
+
+The first is emergent collusion in LLM markets. Agrawal et al. (2025) established that LLM sellers in a continuous double auction develop tacit collusion when permitted to communicate, and that some model families collude more readily than others. Related work has shown similar coordination in Cournot and multi-commodity settings. What this literature documents is that collusion happens; what it does not study is whether an honest participant can undo it.
+
+The second is multi-agent disruption, anchored by Bell & Madisetti (2026). Their fishing game showed that a single defector can collapse a cooperating group, and that restitution-based correction (returning the taken surplus) repaired the group more effectively than punishment did. Our work is the structural mirror of theirs: instead of one bad agent breaking a good group, we test one good agent against a bad group, and we ask whether their restitution result transfers from a resource commons to a financial market.
+
+The third is human social influence. Xie et al. (2011) give us a quantitative tipping point (roughly 10 percent committed minority) for when a minority opinion overtakes a majority, and Jones & Kelly (2007) give us the babble effect, the tendency to be swayed by volume of speech rather than quality of argument. Both findings come from human subjects. Neither has been tested on LLM agents. This proposal asks whether these human dynamics also govern AI agents, and whether they can explain when an honest agent succeeds or fails.
+
+## What Is Missing in Current Work
+
+The gaps this proposal targets are specific and, taken together, define an unexplored corner of the field:
+
+- The Bell & Madisetti paper only tests one direction, a bad agent breaking a good group. The opposite direction has not been tested.
+- The Xie et al. tipping point has never been measured in LLM agents, so we do not know whether AI populations have a threshold at all, let alone whether it sits near the human 10 percent.
+- The Jones & Kelly babble effect has only been studied with human participants, never with AI agents.
+- No work has measured whether different AI model families (Claude, GPT, Gemini, and Llama) behave differently under group persuasion pressure in a financial context. Agrawal et al. observed that collusive propensity varies by model but did not explain why; the babble effect is a candidate explanation that no one has tested.
+- No paper has compared informal persuasion (good arguments) against formal enforcement (rule-based correction) as anti-collusion tools in a financial multi-agent system, nor tested whether restitution-based enforcement works outside a resource commons.
+
+## What Is New Here
+
+This proposal does not try to invent something from scratch. It builds on problems that are already partially solved and adds a specific new piece. Concretely, the contributions are:
+
+- The first test of an honest agent, or a small honest minority, against a colluding group in a financial price-setting environment.
+- The first measurement of a committed-minority tipping point in LLM agents, directly compared against the human 10 percent benchmark.
+- The first translation of the Jones & Kelly babble effect from a human setting into an AI agent setting, used to explain cross-model differences in persuadability.
+- The first test of whether restitution-based enforcement, which worked in the fishing game, also works in a financial market rather than a resource commons.
+
+The argument for reviewers is straightforward: we know agents collude, we know one bad agent can break good groups, and we know humans follow predictable group dynamics in discussions. This proposal asks whether those same human dynamics explain when an honest agent can or cannot break collusion, and it tests a concrete solution for the cases when persuasion alone fails.
+
+## The Three Research Questions
+
+**RQ1.** Xie et al. (2011) found that when 10 percent of a human population holds an unshakable belief, the majority eventually adopts it. Do LLM agents follow the same rule? Is there a roughly 10 percent honest-agent threshold that reliably collapses price collusion, or do AI agents require a fundamentally different proportion?
+
+**RQ2.** Research on group dynamics finds that people tend to be swayed by whoever talks the most, not necessarily by whoever makes the best argument, a pattern known as the babble effect. Do LLM agents show the same bias? In other words, when an honest agent tries to break up collusion, does its success depend more on how much it talks than on how sound its reasoning is, and does this explain why some model families are harder to persuade than others?
+
+**RQ3.** In the fishing game paper, giving back the stolen surplus reversed the harmful behavior more effectively than punishing the offenders. Does the same hold in a financial market? When the honest agents are too few to tip the group on their own, does forcing colluders to return overcharged money work better than penalizing them, the same way restitution beat punishment in the fishing game?
+
+## Methodology Overview
+
+All experiments run in a continuous double auction adapted from Agrawal et al. (2025) from a seller market to a lending market, where agents post loan interest rates rather than sale prices and synthetic borrowers accept the lowest available rate. Agents communicate over a shared channel for a fixed number of rounds before committing to a rate each period. Borrower demand and market conditions are generated synthetically with fixed random seeds, so every condition sees an identical market and the only thing that varies is the agent population and the intervention.
+
+We first reproduce emergent collusion with an all-colluding population to validate the environment and establish a baseline collusion level. This replication is not itself a contribution; it is the platform the rest of the work stands on. We then run three sets of experiments:
+
+- For **RQ1**, we hold population size fixed and sweep the number of honest agents upward, recording the collusion level at each proportion and testing whether the breakdown curve has a sharp threshold (as Xie et al. would predict) or declines smoothly.
+- For **RQ2**, we repeat the RQ1 sweep across several model families while logging how much each agent talks, then test whether persuasive power tracks talk volume independent of argument quality, including a condition where the honest agent's verbosity is scaled up and down with its reasoning held fixed.
+- For **RQ3**, in configurations where the honest minority sits below the RQ1 threshold, we add either a punishment rule or a restitution rule and compare which one drives prices back to competitive levels, how fast, and how stably.
+
+A detailed experimental protocol, including population sizes, round counts, seed banks, and the full condition list, accompanies this proposal.
+
+## Evaluation and Metrics
+
+The primary outcome is a **collusion index**, the average markup over the competitive benchmark rate across the final rounds of a run, normalized so that 0 is fully competitive and 1 is the fully colluded ceiling. Secondary outcomes are **time-to-collapse** (the number of rounds before the index drops below a competitive threshold) and **post-intervention stability** (whether the competitive state holds or the group drifts back into collusion). Every condition is run across a fixed bank of random seeds, with the same seeds reused across conditions so that differences reflect the intervention rather than market noise, and all outcomes are reported as means with confidence intervals over seeds.
+
+## Expected Contributions
+
+If the work succeeds, it produces three results that are publishable whichever way they turn out. First, a measured tipping point for honest agents in a financial market, and a direct statement of whether AI agents match, beat, or fall short of the human 10 percent benchmark. Second, evidence for or against the babble effect in LLM agents, and a mechanistic explanation for why some models resist persuasion more than others. Third, a head-to-head comparison of persuasion against enforcement, and a test of whether restitution generalizes beyond the fishing game. A null or surprising result on any of these (for example, AI agents needing far more than 10 percent, or restitution failing where it succeeded in the commons) is just as informative as a positive one, because it tells us where human social science does and does not transfer to AI systems.
+
+## Timeline
+
+| Phase | Work | Approximate duration |
+|-------|------|----------------------|
+| 1 | Adapt the Agrawal et al. environment to the lending scenario, reproduce baseline collusion, lock seed bank and metrics | Weeks 1 to 4 |
+| 2 | RQ1: honest-agent sweep and threshold analysis | Weeks 5 to 8 |
+| 3 | RQ2: cross-model and babble-effect experiments | Weeks 9 to 12 |
+| 4 | RQ3: restitution versus punishment experiments | Weeks 13 to 15 |
+| 5 | Analysis, writing, and presentation | Weeks 16 onward |
+
+## Limitations and Risks
+
+A few risks are worth naming up front. The continuous double auction is a simplified market, so a threshold found in simulation may not transfer directly to a live trading or lending system; we treat the result as a controlled-environment finding, not a deployment guarantee. Model behavior also shifts across versions, so a babble effect measured today may change as providers update their models, which is why we report results per model and per version rather than as universal claims. Finally, defining and detecting collusion in a free-form communication setting is itself nontrivial, so we rely on the price-based collusion index as the ground truth rather than trying to classify intent from the agents' messages.
+
+## References
+
+Agrawal, K., Teo, V., Vazquez, J. J., Kunnavakkam, S., Srikanth, V., & Liu, A. (2025). *Evaluating LLM Agent Collusion in Double Auctions*. arXiv:2507.01413.
+
+Bell, [initials], & Madisetti, V. (2026). *[Fishing game paper, full citation to be completed]*.
+
+Jones, [initials], & Kelly, J. R. (2007). *[Babble effect study, full citation to be completed]*.
+
+Xie, J., Sreenivasan, S., Korniss, G., Zhang, W., Lim, C., & Szymanski, B. K. (2011). Social consensus through the influence of committed minorities. *Physical Review E*, 84(1), 011130.
