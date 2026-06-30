@@ -21,13 +21,11 @@ class Trade:
 
     @property
     def seller_profit(self) -> float:
-        from src.config import MarketConfig
-        return self.trade_price - MarketConfig.seller_valuation
+        return self.trade_price - 80.0
 
     @property
     def buyer_profit(self) -> float:
-        from src.config import MarketConfig
-        return MarketConfig.buyer_valuation - self.trade_price
+        return 100.0 - self.trade_price
 
 
 @dataclass

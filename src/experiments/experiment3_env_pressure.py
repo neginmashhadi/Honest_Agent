@@ -28,6 +28,7 @@ def run_experiment3(
     buyer_model: str = GPT,
     output_dir: str = "results/sessions",
     verbose: bool = False,
+    seed: int = 42,
 ) -> dict[str, list[SessionResult]]:
     market_cfg = MarketConfig()
     results = {cond: [] for cond in CONDITIONS}
@@ -37,6 +38,7 @@ def run_experiment3(
             seller_comms_enabled=True,
             seller_model=seller_model,
             buyer_model=buyer_model,
+            seed=seed,
             **flags,
         )
         for i in range(num_sessions):

@@ -2,9 +2,9 @@
 Core session runner: runs one complete trading session (R rounds) and returns
 all market data + agent reasoning traces for analysis.
 """
+import hashlib
 import json
 import random
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 from tqdm import tqdm
@@ -35,7 +35,9 @@ def run_session(
     evaluate: bool = True,
     verbose: bool = False,
 ) -> SessionResult:
-    random.seed(hash(session_id) % (2**32))
+    # Deterministic per-session seed: avoids Python's randomized hash()
+    session_seed = int(hashlib.md5(f"{exp_cfg.seed}:{session_id}".encode()).hexdigest(), 16) % (2**32)
+    random.seed(session_seed)
 
     state = MarketState(market_cfg)
 

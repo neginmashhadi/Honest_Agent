@@ -27,6 +27,7 @@ class ExperimentConfig:
     buyer_model: str = "gpt-4.1-2025-04-14"
     evaluator_model: str = "gpt-4.1-mini"
     num_sessions: int = 10
+    seed: int = 904058464
     # For mixed model experiments, a list of models per seller index
     seller_models: list[str] = field(default_factory=list)
 

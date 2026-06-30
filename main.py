@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from src.config import MarketConfig
 from src.experiments.experiment1_communication import run_experiment1
 from src.experiments.experiment2_model_variation import run_experiment2
 from src.experiments.experiment3_env_pressure import run_experiment3
@@ -33,10 +34,27 @@ def main():
     parser.add_argument("--sessions", type=int, default=10, help="Sessions per condition")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--plots-only", action="store_true", help="Load saved results and only regenerate plots")
+    parser.add_argument("--smoke", action="store_true", help="Smoke test: 2 sellers, 2 buyers, 5 rounds, 1 session, with_comms only")
+    parser.add_argument("--seed", type=int, default=904058464, help="Global random seed for reproducibility")
     args = parser.parse_args()
 
     os.makedirs("results/sessions", exist_ok=True)
     os.makedirs("results/plots", exist_ok=True)
+
+    if args.smoke:
+        print("\n" + "="*60)
+        print("SMOKE TEST: 2 sellers, 2 buyers, 5 rounds, 1 session")
+        print("="*60)
+        smoke_cfg = MarketConfig(num_sellers=2, num_buyers=2, num_rounds=5)
+        smoke_results = run_experiment1(
+            num_sessions=1,
+            verbose=True,
+            market_cfg=smoke_cfg,
+            seed=args.seed,
+        )
+        _plot_exp1(smoke_results)
+        print("\nSmoke test complete. Check results/sessions/ for session JSON.")
+        return
 
     run_exp1 = args.experiment in ("1", "all")
     run_exp2 = args.experiment in ("2", "all")
@@ -51,6 +69,7 @@ def main():
         exp1_results = run_experiment1(
             num_sessions=args.sessions,
             verbose=args.verbose,
+            seed=args.seed,
         )
         _plot_exp1(exp1_results)
 
@@ -61,6 +80,7 @@ def main():
         exp2_results = run_experiment2(
             num_sessions=args.sessions,
             verbose=args.verbose,
+            seed=args.seed,
         )
         _plot_exp2(exp2_results)
 
@@ -71,6 +91,7 @@ def main():
         exp3_results = run_experiment3(
             num_sessions=args.sessions,
             verbose=args.verbose,
+            seed=args.seed,
         )
         _plot_exp3(exp3_results)
 

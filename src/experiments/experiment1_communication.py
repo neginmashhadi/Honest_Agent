@@ -15,8 +15,11 @@ def run_experiment1(
     buyer_model: str = "gpt-4.1-2025-04-14",
     output_dir: str = "results/sessions",
     verbose: bool = False,
+    market_cfg: MarketConfig = None,
+    seed: int = 904058464,
 ) -> dict[str, list[SessionResult]]:
-    market_cfg = MarketConfig()
+    if market_cfg is None:
+        market_cfg = MarketConfig()
     results = {"with_comms": [], "without_comms": []}
 
     for condition, comms in [("with_comms", True), ("without_comms", False)]:
@@ -26,6 +29,7 @@ def run_experiment1(
             boss_pressure=False,
             seller_model=seller_model,
             buyer_model=buyer_model,
+            seed=seed,
         )
         for i in range(num_sessions):
             session_id = f"exp1_{condition}_{i}"

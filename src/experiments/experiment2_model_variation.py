@@ -27,6 +27,7 @@ def run_experiment2(
     num_sessions: int = 10,
     output_dir: str = "results/sessions",
     verbose: bool = False,
+    seed: int = 904058464,
 ) -> dict[str, list[SessionResult]]:
     market_cfg = MarketConfig()
     results = {cond: [] for cond in CONDITION_MODELS}
@@ -39,6 +40,7 @@ def run_experiment2(
             seller_model=GPT,
             buyer_model=GPT,
             seller_models=seller_models,
+            seed=seed,
         )
         for i in range(num_sessions):
             session_id = f"exp2_{condition}_{i}"
