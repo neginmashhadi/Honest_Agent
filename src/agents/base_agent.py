@@ -66,48 +66,76 @@ def parse_json_response(text: str) -> dict:
         return json.loads(text[start:end + 1])
 
 
-# Transient errors worth retrying on a fresh sample: rate limits, momentary
-# server overload/5xx, connection drops, timeouts. Deliberately excludes
-# permanent errors (bad request, auth, not-found) that would just fail
-# identically every retry and waste the backoff.
+# Rate limits get their own, longer retry budget (see call_llm_and_parse):
+# they're worth waiting out -- a 429 usually clears within tens of seconds --
+# unlike a bad parse, where retrying faster doesn't cost anything by waiting.
+RATE_LIMIT_ERRORS = (
+    anthropic.RateLimitError,
+    openai.RateLimitError,
+)
+
+# Transient errors worth retrying on a fresh sample: momentary server
+# overload/5xx, connection drops, timeouts, and bad/empty parses. Deliberately
+# excludes permanent errors (bad request, auth, not-found) that would just
+# fail identically every retry and waste the backoff.
 RETRYABLE_ERRORS = (
     json.JSONDecodeError,
     ValueError,
     anthropic.APIConnectionError,
     anthropic.APITimeoutError,
-    anthropic.RateLimitError,
     anthropic.InternalServerError,
     anthropic.OverloadedError,
     openai.APIConnectionError,
     openai.APITimeoutError,
-    openai.RateLimitError,
     openai.InternalServerError,
 )
 
 
-def call_llm_and_parse(model: str, prompt: str, temperature: float = 1.0, max_retries: int = 5) -> dict:
+def call_llm_and_parse(
+    model: str,
+    prompt: str,
+    temperature: float = 1.0,
+    max_retries: int = 5,
+    rate_limit_max_retries: int = 8,
+    rate_limit_backoff_cap: float = 60.0,
+) -> dict:
     """call_llm + parse_json_response, retrying the whole round-trip (not just the
     parse) on an empty/invalid response or a transient API error -- a fresh
     sample/request is what actually helps, since re-parsing the same bad text
-    can't succeed."""
+    can't succeed.
+
+    Rate limits (429s) get their own independent retry budget with a longer,
+    capped exponential backoff (up to rate_limit_backoff_cap seconds) instead
+    of sharing max_retries' short generic schedule -- a burst of 429s under
+    high parallel_workers is worth waiting out rather than giving up on."""
     last_error: Exception = ValueError("call_llm_and_parse: no attempts made")
     last_raw = ""
-    for attempt in range(max_retries + 1):
+    attempt = 0
+    rate_limit_attempt = 0
+    while True:
         try:
             raw = call_llm(model, prompt, temperature=temperature)
             last_raw = raw
             if not raw.strip():
                 raise ValueError("empty response from LLM")
             return parse_json_response(raw)
+        except RATE_LIMIT_ERRORS as e:
+            last_error = e
+            if rate_limit_attempt >= rate_limit_max_retries:
+                break
+            time.sleep(min(2 ** rate_limit_attempt, rate_limit_backoff_cap))
+            rate_limit_attempt += 1
         except RETRYABLE_ERRORS as e:
             last_error = e
-            if attempt < max_retries:
-                time.sleep(2 ** attempt)  # 1s, 2s, 4s, ...
+            if attempt >= max_retries:
+                break
+            time.sleep(2 ** attempt)  # 1s, 2s, 4s, ...
+            attempt += 1
     # Surface a preview of the last raw response that failed to parse -- the
     # original exception alone (e.g. "Expecting value: line 1 column 1")
     # gives no way to tell what the model actually returned.
     preview = last_raw.strip()[:500]
     raise RuntimeError(
-        f"call_llm_and_parse: giving up after {max_retries + 1} attempts ({last_error}); "
-        f"last raw response: {preview!r}"
+        f"call_llm_and_parse: giving up after {attempt} generic + {rate_limit_attempt} "
+        f"rate-limit retries ({last_error}); last raw response: {preview!r}"
     ) from last_error

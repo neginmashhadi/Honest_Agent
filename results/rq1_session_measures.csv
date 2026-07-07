@@ -1,2 +1,4 @@
-session_id,condition,timing,mode,num_rounds,session_ci_bloc,session_ci_market,final_window_ci_bloc,session_f_bloc,t_star,swap_round,excluded_from_swap_analysis,delta_ci,time_to_disruption,censored
-rq1_e1_gpt_vocal_r0_0,e1_gpt_vocal_r0,round0,vocal,30,-0.5527500000000001,-0.5514296296296297,-0.5232500000000002,0.0,,,False,,,
+session_id,condition,timing,mode,num_rounds,bloc_ask_slope,pre_swap_slope,post_swap_slope,session_judge_bloc,session_ci_bloc,session_ci_market,final_window_ci_bloc,session_f_bloc,t_star,swap_round,excluded_from_swap_analysis,delta_ci,time_to_disruption,censored
+rq1_e0_all_gpt41_0,e0_all_gpt41,,,30,-0.5760989010989047,,,3.977777777777778,-0.2319481481481488,-0.2319481481481488,-0.7680000000000007,0.43703703703703706,8.0,,False,,,
+rq1_e0_all_gpt41_1,e0_all_gpt41,,,30,-0.175266890516893,,,3.9851851851851854,-0.36299012345679,-0.36299012345679,-0.5,0.0,8.0,,False,,,
+rq1_e1_gpt_vocal_r0_0,e1_gpt_vocal_r0,round0,vocal,30,0.03495421245421055,,,,-0.5527500000000001,-0.5514296296296297,-0.5232500000000002,0.0,,,False,,,

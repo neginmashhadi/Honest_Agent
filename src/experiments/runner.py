@@ -4,6 +4,7 @@ all market data + agent reasoning traces for analysis.
 """
 import hashlib
 import json
+import os
 import random
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -31,6 +32,17 @@ CI_CONFIG = CollusionIndexConfig()
 JUDGE_CONFIG = JudgeConfig()
 
 
+def _append_log(logs_dir: str, session_id: str, message: str) -> None:
+    """Appends one line to results/logs/<session_id>.log, unconditionally --
+    not gated by verbose, so warnings from a parallel run (where per-session
+    console output is suppressed to avoid garbled interleaved prints) are
+    never silently lost."""
+    os.makedirs(logs_dir, exist_ok=True)
+    path = os.path.join(logs_dir, f"{session_id}.log")
+    with open(path, "a") as f:
+        f.write(message + "\n")
+
+
 @dataclass
 class SessionResult:
     session_id: str
@@ -42,6 +54,8 @@ class SessionResult:
     final_profits: dict[str, float]     # agent_id -> total profit
     honest_agent: Optional[dict] = None      # {present, mode, timing, swap_round} per honest_agent_spec.md section 6
     collusion_summary: Optional[dict] = None  # collusion_index.session_summary() output
+    failed_agent_calls: int = 0         # count of caught seller/buyer/evaluator call failures this session
+    valid: bool = True                  # False if the session produced zero trades and zero recorded asks
 
 
 def _make_honest_agent(seller_id: str, company: str, market_cfg: MarketConfig, exp_cfg: ExperimentConfig) -> HonestAgent:
@@ -103,6 +117,7 @@ def run_session(
     evaluate: bool = True,
     verbose: bool = False,
     session_index: Optional[int] = None,
+    logs_dir: str = "results/logs",
 ) -> SessionResult:
     # Deterministic per-session seed: avoids Python's randomized hash().
     # If session_index is given, the seed is derived from it instead of session_id,
@@ -172,6 +187,7 @@ def run_session(
     eval_scores: list[dict] = []
     round_metrics: list[dict] = []
     market_history: list[dict] = []
+    failed_agent_calls = 0
 
     # Messages carry over from previous round
     seller_messages: dict[str, str] = {}
@@ -195,8 +211,11 @@ def run_session(
                     seller_messages=seller_messages,
                 )
             except Exception as e:
+                msg = f"[WARN] Seller {seller.seller_id} round {r} error: {e}"
+                _append_log(logs_dir, session_id, msg)
                 if verbose:
-                    print(f"[WARN] Seller {seller.seller_id} round {r} error: {e}")
+                    print(msg)
+                failed_agent_calls += 1
                 resp = {}
 
             ask = seller.get_ask()
@@ -223,8 +242,11 @@ def run_session(
                     if score.get("score") is not None:
                         round_judge_scores[seller.seller_id] = score["score"]
                 except Exception as e:
+                    msg = f"[WARN] Evaluator error for {seller.seller_id} r{r}: {e}"
+                    _append_log(logs_dir, session_id, msg)
                     if verbose:
-                        print(f"[WARN] Evaluator error for {seller.seller_id} r{r}: {e}")
+                        print(msg)
+                    failed_agent_calls += 1
 
         # --- Buyers act ---
         for buyer in buyers:
@@ -238,8 +260,11 @@ def run_session(
                     agent_successful_trades=state.format_agent_trades(buyer.buyer_id),
                 )
             except Exception as e:
+                msg = f"[WARN] Buyer {buyer.buyer_id} round {r} error: {e}"
+                _append_log(logs_dir, session_id, msg)
                 if verbose:
-                    print(f"[WARN] Buyer {buyer.buyer_id} round {r} error: {e}")
+                    print(msg)
+                failed_agent_calls += 1
                 resp = {}
 
             bid = buyer.get_bid()
@@ -331,6 +356,18 @@ def run_session(
         "judge_series_bloc": j_summary["judge_series_bloc"],
     }
 
+    # Validity gate: a session that produced no trades and no recorded asks
+    # at all is not silent-degraded data, it's a dead session (e.g. every
+    # agent call failed) -- flag it loudly rather than letting it quietly
+    # pollute the analysis as a zero-CI/zero-slope data point.
+    total_trades = sum(rm["num_trades"] for rm in round_metrics)
+    total_asks = sum(len(mh["asks"]) for mh in market_history)
+    valid = not (total_trades == 0 and total_asks == 0)
+    if not valid:
+        error_msg = f"[ERROR] session {session_id} produced no market activity"
+        _append_log(logs_dir, session_id, error_msg)
+        print(error_msg)  # always, regardless of verbose -- this must never be silent
+
     return SessionResult(
         session_id=session_id,
         condition=condition,
@@ -341,6 +378,8 @@ def run_session(
         final_profits=dict(state.agent_profits),
         honest_agent=honest_agent_log,
         collusion_summary=collusion_summary,
+        failed_agent_calls=failed_agent_calls,
+        valid=valid,
     )
 
 

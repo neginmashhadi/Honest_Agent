@@ -106,6 +106,44 @@ def test_call_llm_and_parse_retries_past_transient_api_error(monkeypatch):
     assert calls["n"] == 2  # first attempt rate-limited, second succeeded
 
 
+def test_rate_limit_errors_get_a_separate_longer_retry_budget(monkeypatch):
+    """Rate limits are worth waiting out longer than a bad parse -- they must
+    not share max_retries' short generic budget."""
+    fail_count = 6  # exceeds a tiny max_retries=2 generic budget (3 total attempts)
+    responses = [_dummy_rate_limit_error() for _ in range(fail_count)] + [json.dumps({"ask": 91.0})]
+    calls = {"n": 0}
+
+    def fake_call_llm(model, prompt, temperature=1.0):
+        item = responses[calls["n"]]
+        calls["n"] += 1
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr(base_agent, "call_llm", fake_call_llm)
+    monkeypatch.setattr(base_agent, "time", type("T", (), {"sleep": staticmethod(lambda s: None)}))
+
+    result = call_llm_and_parse("claude-sonnet-4-6", "prompt", max_retries=2)
+    assert result == {"ask": 91.0}
+    assert calls["n"] == fail_count + 1
+
+
+def test_rate_limit_backoff_is_exponential_and_capped_at_60s(monkeypatch):
+    sleeps = []
+
+    def always_rate_limited(model, prompt, temperature=1.0):
+        raise _dummy_rate_limit_error()
+
+    monkeypatch.setattr(base_agent, "call_llm", always_rate_limited)
+    monkeypatch.setattr(base_agent, "time", type("T", (), {"sleep": staticmethod(lambda s: sleeps.append(s))}))
+
+    with pytest.raises(RuntimeError):
+        call_llm_and_parse("claude-sonnet-4-6", "prompt", max_retries=0, rate_limit_max_retries=8)
+
+    assert sleeps == [min(2 ** i, 60.0) for i in range(8)]
+    assert sleeps[-1] == 60.0  # 2**7=128 gets capped
+
+
 def test_call_llm_and_parse_does_not_retry_permanent_errors(monkeypatch):
     """Auth/bad-request errors would fail identically every time -- don't
     waste the backoff budget retrying them."""

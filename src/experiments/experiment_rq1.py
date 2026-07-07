@@ -100,25 +100,37 @@ def _condition_configs(e2_timing: str = "swap") -> dict[str, dict]:
 def run_experiment_rq1(
     num_sessions: int = 10,
     output_dir: str = "results/sessions",
+    logs_dir: str = "results/logs",
     verbose: bool = False,
     seed: int = 904058464,
     e2_timing: str = "swap",
     conditions: list[str] = None,
     parallel_workers: int = 1,
+    session_indices: Optional[dict[str, list[int]] | list[int]] = None,
 ) -> dict[str, list[SessionResult]]:
     """Runs every (condition, session_index) cell. Sequential by default;
     pass parallel_workers > 1 to run sessions concurrently via
     ThreadPoolExecutor -- sessions are fully independent (each seeded off its
     own session_index, see runner.run_session) and each writes its own JSON
-    file, so there's no shared state or write contention across threads."""
+    file, so there's no shared state or write contention across threads.
+
+    session_indices selects which indices to (re)run instead of the full
+    range(num_sessions) -- e.g. to rerun only the sessions that failed
+    without paying for the ones that already succeeded. Pass a flat list to
+    apply the same indices to every condition, or a dict (condition ->
+    indices) for per-condition control; a condition missing from the dict
+    still gets the full range(num_sessions)."""
     market_cfg = MarketConfig()
     condition_configs = _condition_configs(e2_timing=e2_timing)
     if conditions is not None:
         condition_configs = {c: condition_configs[c] for c in conditions}
 
-    results: dict[str, list[Optional[SessionResult]]] = {
-        cond: [None] * num_sessions for cond in condition_configs
-    }
+    def _indices_for(condition: str) -> list[int]:
+        if isinstance(session_indices, dict):
+            return list(session_indices.get(condition, range(num_sessions)))
+        if session_indices is not None:
+            return list(session_indices)
+        return list(range(num_sessions))
 
     jobs = []
     for condition, overrides in condition_configs.items():
@@ -132,8 +144,14 @@ def run_experiment_rq1(
             honest_agent_seller_index=HONEST_SELLER_INDEX,
             **overrides,
         )
-        for i in range(num_sessions):
+        for i in _indices_for(condition):
             jobs.append((condition, exp_cfg, i))
+
+    # Keyed by index rather than a preallocated positional list: session_indices
+    # may be a non-contiguous subset (e.g. [5,6,7,8,9]), so slot-by-position
+    # doesn't work -- collected as {index: result} and sorted into a list per
+    # condition at the end.
+    results_by_index: dict[str, dict[int, SessionResult]] = {cond: {} for cond in condition_configs}
 
     def _run_one(condition: str, exp_cfg: ExperimentConfig, i: int, session_verbose: bool) -> SessionResult:
         session_id = f"rq1_{condition}_{i}"
@@ -145,6 +163,7 @@ def run_experiment_rq1(
             evaluate=True,
             verbose=session_verbose,
             session_index=i,
+            logs_dir=logs_dir,
         )
         _save(result, output_dir)
         return result
@@ -153,7 +172,7 @@ def run_experiment_rq1(
         for condition, exp_cfg, i in jobs:
             print(f"\n=== rq1_{condition}_{i} ===")
             result = _run_one(condition, exp_cfg, i, session_verbose=verbose)
-            results[condition][i] = result
+            results_by_index[condition][i] = result
     else:
         # Per-session tqdm bars (and the WARN prints gated by the same verbose
         # flag) would garble the terminal if run concurrently -- they all
@@ -168,9 +187,24 @@ def run_experiment_rq1(
             }
             for future in as_completed(futures):
                 condition, i = futures[future]
-                results[condition][i] = future.result()
+                result = future.result()
+                results_by_index[condition][i] = result
                 completed += 1
-                print(f"[{completed}/{total}] done: rq1_{condition}_{i}")
+                flag = "" if result.valid else "  [INVALID: no market activity]"
+                print(f"[{completed}/{total}] done: rq1_{condition}_{i}{flag}")
+
+    results = {
+        cond: [results_by_index[cond][i] for i in sorted(results_by_index[cond])]
+        for cond in condition_configs
+    }
+
+    # Never let a run finish quietly if part of it failed: report a failure
+    # count instead of ending on a plain "[n/n] done".
+    invalid_ids = [r.session_id for lst in results.values() for r in lst if not r.valid]
+    if invalid_ids:
+        print(f"\n[ERROR] {len(invalid_ids)}/{len(jobs)} session(s) produced no market activity: {', '.join(invalid_ids)}")
+    else:
+        print(f"\nAll {len(jobs)} session(s) completed with valid market activity.")
 
     return results
 
@@ -188,5 +222,7 @@ def _save(result: SessionResult, output_dir: str):
             "final_profits": result.final_profits,
             "honest_agent": result.honest_agent,
             "collusion_summary": result.collusion_summary,
+            "failed_agent_calls": result.failed_agent_calls,
+            "valid": result.valid,
         }, f, indent=2)
     print(f"  Saved -> {path}")
