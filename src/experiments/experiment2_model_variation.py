@@ -3,9 +3,9 @@ Experiment 2 – Model Variation
 RQ2: How is collusion impacted by model choice?
 Conditions:
   - all_gpt41: 5 GPT-4.1 sellers
-  - all_claude: 5 Claude-3.7-Sonnet sellers
-  - mixed: 3 GPT-4.1 + 2 Claude-3.7-Sonnet sellers
-Buyers are a mix of Claude-3.7-Sonnet and GPT-4.1 (paper uses both).
+  - all_claude: 5 Claude-Sonnet-4.6 sellers
+  - mixed: 3 GPT-4.1 + 2 Claude-Sonnet-4.6 sellers
+Buyers are a mix of Claude-Sonnet-4.6 and GPT-4.1 (paper uses both).
 """
 import json
 import os
@@ -13,7 +13,7 @@ from src.config import MarketConfig, ExperimentConfig
 from src.experiments.runner import run_session, SessionResult
 
 GPT = "gpt-4.1-2025-04-14"
-CLAUDE = "claude-3-7-sonnet-20250219"
+CLAUDE = "claude-sonnet-4-6"
 
 
 CONDITION_MODELS = {

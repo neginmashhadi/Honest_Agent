@@ -1,38 +1,47 @@
-# from openai import OpenAI, RateLimitError, AuthenticationError
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+from anthropic import Anthropic
 
-# client = OpenAI()
+load_dotenv()
 
-# import os
-# print("env key tail:", (os.environ.get("OPENAI_API_KEY") or "NONE")[-6:])
-# print("client key tail:", client.api_key[-6:])
+client = OpenAI()
+print("env key tail:", (os.environ.get("OPENAI_API_KEY") or "NONE")[-6:])
+print("client key tail:", client.api_key[-6:])
 
-# try:
-#     response = client.responses.create(
-#         model="gpt-4.1-2025-04-14",
-#         input="Reply with exactly: API works"
-#     )
+anthropic_client = Anthropic()
 
-#     print("SUCCESS")
-#     print(response.output_text)
+# --- List ALL available models, sorted ---
+print("\n=== ALL AVAILABLE MODELS (OpenAI key) ===")
+try:
+    ids = sorted(m.id for m in client.models.list().data)
+    for mid in ids:
+        print(" ", mid)
+    print(f"\n  total: {len(ids)} models")
+except Exception as e:
+    print("Could not list models:", e)
 
-# except AuthenticationError as e:
-#     print("AUTH ERROR: Your API key is missing, wrong, or not loaded.")
-#     print(e)
+# --- Test a specific GPT model end to end ---
+print("\n=== GPT CALL TEST ===")
+for model in ["gpt-4.1-2025-04-14", "gpt-4.1"]:
+    try:
+        r = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Reply with exactly: API works"}],
+            max_tokens=10,
+        )
+        print(f"  {model}: SUCCESS -> {r.choices[0].message.content!r}")
+    except Exception as e:
+        # print just the model + short reason, not the whole traceback
+        msg = str(e)
+        print(f"  {model}: FAILED -> {msg[:120]}")
 
-# except RateLimitError as e:
-#     print("RATE LIMIT ERROR: The key works, but your org/project is capped right now.")
-#     print(e)
-
-# except Exception as e:
-#     print("OTHER ERROR:")
-#     print(e)
-
-
-
-# from openai import OpenAI
-# client = OpenAI()
-# for m in client.models.list().data:
-#     if "gpt-4.1" in m.id:
-#         print(m.id)
-
-print("Available models:")
+# --- List ALL available models, sorted (Anthropic key) ---
+print("\n=== ALL AVAILABLE MODELS (Anthropic key) ===")
+try:
+    ids = sorted(m.id for m in anthropic_client.models.list())
+    for mid in ids:
+        print(" ", mid)
+    print(f"\n  total: {len(ids)} models")
+except Exception as e:
+    print("Could not list models:", e)

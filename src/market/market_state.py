@@ -45,14 +45,21 @@ class MarketState:
         self.agent_profits: dict[str, float] = {}
         self.agent_trades: dict[str, list[Trade]] = {}
 
-    def initialize_round1(self, buyer_ids: list[str], seller_ids: list[str]):
-        """Pre-populate round 1 queues with random bids/asks per paper."""
+    def initialize_round1(self, buyer_ids: list[str], seller_ids: list[str], rng: Optional[random.Random] = None):
+        """Pre-populate round 1 queues with random bids/asks per paper.
+
+        Accepts an explicit rng (random.Random instance) so callers running
+        sessions concurrently (e.g. a ThreadPoolExecutor) can each use their
+        own seeded stream instead of racing on the shared global random
+        module's state. Defaults to the global module for existing callers.
+        """
+        rng = rng if rng is not None else random
         cfg = self.config
         for bid in buyer_ids:
-            price = round(random.uniform(cfg.initial_bid_low, cfg.initial_bid_high), 2)
+            price = round(rng.uniform(cfg.initial_bid_low, cfg.initial_bid_high), 2)
             self.bid_queue[bid] = price
         for sid in seller_ids:
-            price = round(random.uniform(cfg.initial_ask_low, cfg.initial_ask_high), 2)
+            price = round(rng.uniform(cfg.initial_ask_low, cfg.initial_ask_high), 2)
             self.ask_queue[sid] = price
 
     def update_order(self, agent_id: str, is_seller: bool, price: Optional[float]):

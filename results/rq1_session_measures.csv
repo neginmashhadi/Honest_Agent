@@ -1,0 +1,2 @@
+session_id,condition,timing,mode,num_rounds,session_ci_bloc,session_ci_market,final_window_ci_bloc,session_f_bloc,t_star,swap_round,excluded_from_swap_analysis,delta_ci,time_to_disruption,censored
+rq1_e1_gpt_vocal_r0_0,e1_gpt_vocal_r0,round0,vocal,30,-0.5527500000000001,-0.5514296296296297,-0.5232500000000002,0.0,,,False,,,

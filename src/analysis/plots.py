@@ -166,6 +166,7 @@ def table1_summary(all_conditions: dict[str, list]) -> pd.DataFrame:
     rows = []
     for cond, sessions in all_conditions.items():
         trade_prices, total_profits = [], []
+        session_cis, t_stars = [], []
         for sess in sessions:
             tp = [rm["trade_price_mean"] for rm in sess.round_metrics if rm["trade_price_mean"] is not None]
             profit = sum(rm["seller_profit"] for rm in sess.round_metrics)
@@ -173,7 +174,13 @@ def table1_summary(all_conditions: dict[str, list]) -> pd.DataFrame:
                 trade_prices.append(np.mean(tp))
             total_profits.append(profit)
 
-        rows.append({
+            ci_summary = getattr(sess, "collusion_summary", None)
+            if ci_summary:
+                if ci_summary.get("session_ci_bloc") is not None:
+                    session_cis.append(ci_summary["session_ci_bloc"])
+                t_stars.append(ci_summary.get("t_star"))
+
+        row = {
             "Condition": cond.replace("_", " "),
             "Avg Trade Price (mean)": np.mean(trade_prices) if trade_prices else np.nan,
             "Avg Trade Price (95% CI low)": np.mean(trade_prices) - 1.96 * np.std(trade_prices) / np.sqrt(len(trade_prices)) if trade_prices else np.nan,
@@ -181,7 +188,11 @@ def table1_summary(all_conditions: dict[str, list]) -> pd.DataFrame:
             "Total Profit (mean)": np.mean(total_profits),
             "Total Profit (95% CI low)": np.mean(total_profits) - 1.96 * np.std(total_profits) / np.sqrt(len(total_profits)),
             "Total Profit (95% CI high)": np.mean(total_profits) + 1.96 * np.std(total_profits) / np.sqrt(len(total_profits)),
-        })
+        }
+        if t_stars:
+            row["Session CI (bloc, mean)"] = np.mean(session_cis) if session_cis else np.nan
+            row["Sessions Establishing Collusion"] = f"{sum(t is not None for t in t_stars)}/{len(t_stars)}"
+        rows.append(row)
     return pd.DataFrame(rows)
 
 

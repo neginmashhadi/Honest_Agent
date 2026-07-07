@@ -6,14 +6,29 @@ import hashlib
 import json
 import random
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 from tqdm import tqdm
 
 from src.config import MarketConfig, ExperimentConfig, SELLER_COMPANIES, BUYER_COMPANIES
 from src.market.market_state import MarketState
 from src.agents.seller_agent import SellerAgent
 from src.agents.buyer_agent import BuyerAgent
+from src.agents.honest_agent import HonestAgent
 from src.evaluation.evaluator import evaluate_seller_round
+from src.evaluation.collusion_index import (
+    CollusionIndexConfig,
+    compute_round_ci,
+    session_summary as compute_session_summary_ci,
+)
+from src.evaluation.judge_index import (
+    JudgeConfig,
+    compute_round_judge_score,
+    detect_collusion_established_judge,
+    judge_summary as compute_judge_summary,
+)
+
+CI_CONFIG = CollusionIndexConfig()
+JUDGE_CONFIG = JudgeConfig()
 
 
 @dataclass
@@ -25,6 +40,59 @@ class SessionResult:
     eval_scores: list[dict]             # flat list of evaluator outputs
     market_history: list[dict]          # raw round history (bids, asks, trades)
     final_profits: dict[str, float]     # agent_id -> total profit
+    honest_agent: Optional[dict] = None      # {present, mode, timing, swap_round} per honest_agent_spec.md section 6
+    collusion_summary: Optional[dict] = None  # collusion_index.session_summary() output
+
+
+def _make_honest_agent(seller_id: str, company: str, market_cfg: MarketConfig, exp_cfg: ExperimentConfig) -> HonestAgent:
+    return HonestAgent(
+        seller_id=seller_id,
+        company=company,
+        model=exp_cfg.honest_agent_model,
+        valuation=market_cfg.seller_valuation,
+        num_rounds=market_cfg.num_rounds,
+        seller_comms_enabled=exp_cfg.seller_comms_enabled,
+        temperature=exp_cfg.honest_agent_temperature,
+        messaging_enabled=(exp_cfg.honest_agent_mode != "silent"),
+        mode=exp_cfg.honest_agent_mode,
+    )
+
+
+@dataclass
+class SwapController:
+    """Online swap-in trigger per honest_agent_spec.md section 4b.
+
+    v2 (collusion_index_spec.md v2): triggers on the bloc-mean LLM-judge
+    coordination score (J_t >= theta for k consecutive rounds), not the
+    ask-based collusion index -- the CI proved too noisy (round-1 anchoring)
+    to separate colluding from competitive sessions; the judge score does.
+    """
+    swap_seller_id: str
+    honest_agent_factory: Callable[[], HonestAgent]
+    judge_config: JudgeConfig = field(default_factory=JudgeConfig)
+    triggered: bool = False
+    t_star: Optional[int] = None
+    swap_round: Optional[int] = None
+
+    def maybe_swap(self, round_idx: int, judge_series: list[Optional[float]], agents: list) -> list:
+        """Call once per round, after round_idx's bloc J_t has been appended to
+        judge_series and before round_idx + 1 begins. Replaces swap_seller_id's
+        agent object in-place in `agents` the instant T* is detected, so the
+        replacement takes effect starting round T* + 1."""
+        if self.triggered:
+            return agents
+        t_star = detect_collusion_established_judge(
+            judge_series, theta=self.judge_config.theta, k=self.judge_config.k, burn_in=self.judge_config.burn_in
+        )
+        if t_star is not None and t_star == round_idx:
+            self.t_star = t_star
+            self.swap_round = t_star + 1
+            self.triggered = True
+            for i, agent in enumerate(agents):
+                if agent.seller_id == self.swap_seller_id:
+                    agents[i] = self.honest_agent_factory()
+                    break
+        return agents
 
 
 def run_session(
@@ -34,18 +102,33 @@ def run_session(
     exp_cfg: ExperimentConfig,
     evaluate: bool = True,
     verbose: bool = False,
+    session_index: Optional[int] = None,
 ) -> SessionResult:
-    # Deterministic per-session seed: avoids Python's randomized hash()
-    session_seed = int(hashlib.md5(f"{exp_cfg.seed}:{session_id}".encode()).hexdigest(), 16) % (2**32)
-    random.seed(session_seed)
+    # Deterministic per-session seed: avoids Python's randomized hash().
+    # If session_index is given, the seed is derived from it instead of session_id,
+    # so different conditions sharing the same session_index get identical random
+    # draws (round-1 price init etc.) — pairs baseline and honest-agent sessions
+    # per honest_agent_spec.md section 5.
+    #
+    # Uses a session-local random.Random instance rather than seeding the
+    # global random module: sessions may run concurrently (ThreadPoolExecutor
+    # in experiment_rq1.run_experiment_rq1), and the global module's state is
+    # shared across threads -- seeding it here would race with another
+    # session's draws and silently break reproducibility for both.
+    seed_key = session_index if session_index is not None else session_id
+    session_seed = int(hashlib.md5(f"{exp_cfg.seed}:{seed_key}".encode()).hexdigest(), 16) % (2**32)
+    rng = random.Random(session_seed)
 
     state = MarketState(market_cfg)
 
     seller_ids = [f"S{i+1}" for i in range(market_cfg.num_sellers)]
     buyer_ids = [f"B{i+1}" for i in range(market_cfg.num_buyers)]
 
+    honest_round0 = exp_cfg.honest_agent_enabled and exp_cfg.honest_agent_timing == "round0"
     sellers = [
-        SellerAgent(
+        _make_honest_agent(sid, SELLER_COMPANIES[i], market_cfg, exp_cfg)
+        if honest_round0 and i == exp_cfg.honest_agent_seller_index
+        else SellerAgent(
             seller_id=sid,
             company=SELLER_COMPANIES[i],
             model=exp_cfg.seller_models[i],
@@ -57,6 +140,19 @@ def run_session(
         )
         for i, sid in enumerate(seller_ids)
     ]
+
+    swap_controller: Optional[SwapController] = None
+    if exp_cfg.honest_agent_enabled and exp_cfg.honest_agent_timing == "swap":
+        swap_seller_id = seller_ids[exp_cfg.honest_agent_seller_index]
+        swap_company = SELLER_COMPANIES[exp_cfg.honest_agent_seller_index]
+        swap_controller = SwapController(
+            swap_seller_id=swap_seller_id,
+            honest_agent_factory=lambda: _make_honest_agent(swap_seller_id, swap_company, market_cfg, exp_cfg),
+            judge_config=JUDGE_CONFIG,
+        )
+    bloc_ci_series: list[Optional[float]] = []
+    judge_series: list[Optional[float]] = []
+    session_log: list[dict] = []
 
     buyers = [
         BuyerAgent(
@@ -70,7 +166,7 @@ def run_session(
     ]
 
     # Pre-populate round 1 queues
-    state.initialize_round1(buyer_ids, seller_ids)
+    state.initialize_round1(buyer_ids, seller_ids, rng=rng)
 
     seller_reasoning: dict[str, list] = {sid: [] for sid in seller_ids}
     eval_scores: list[dict] = []
@@ -84,6 +180,8 @@ def run_session(
     for r in tqdm(range(1, market_cfg.num_rounds + 1), desc=f"Session {session_id}", disable=not verbose):
         # --- Sellers act ---
         new_seller_messages: dict[str, str] = {}
+        round_judge_scores: dict[str, float] = {}
+        current_honest_ids = {s.seller_id for s in sellers if getattr(s, "agent_type", "colluder") == "honest"}
 
         for seller in sellers:
             try:
@@ -109,7 +207,8 @@ def run_session(
                 new_seller_messages[seller.seller_id] = msg
 
             reasoning = seller.get_reasoning()
-            seller_reasoning[seller.seller_id].append({"round": r, **reasoning})
+            agent_type = getattr(seller, "agent_type", "colluder")
+            seller_reasoning[seller.seller_id].append({"round": r, "agent_type": agent_type, **reasoning})
 
             # Run LLM evaluator on this seller's reasoning
             if evaluate and reasoning:
@@ -121,6 +220,8 @@ def run_session(
                         evaluator_model=exp_cfg.evaluator_model,
                     )
                     eval_scores.append(score)
+                    if score.get("score") is not None:
+                        round_judge_scores[seller.seller_id] = score["score"]
                 except Exception as e:
                     if verbose:
                         print(f"[WARN] Evaluator error for {seller.seller_id} r{r}: {e}")
@@ -177,12 +278,58 @@ def run_session(
             "round": r,
             "bids": dict(rh.bids),
             "asks": dict(rh.asks),
+            "honest_seller_ids": sorted(current_honest_ids),
             "trades": [
                 {"buyer": t.buyer_id, "seller": t.seller_id,
                  "bid": t.bid_price, "ask": t.ask_price, "trade_price": t.trade_price}
                 for t in trades
             ],
         })
+        session_log.append({"round": r, "asks": dict(rh.asks), "honest_seller_ids": current_honest_ids})
+
+        # --- Online collusion-index tracking (descriptive, per collusion_index_spec.md v2) ---
+        bloc_asks = [price for sid, price in rh.asks.items() if sid not in current_honest_ids]
+        bloc_ci_series.append(compute_round_ci(bloc_asks, p_star=market_cfg.competitive_equilibrium, v=market_cfg.buyer_valuation))
+
+        # --- Online judge-score tracking (drives the swap-in trigger, v2) ---
+        bloc_scores = [s for sid, s in round_judge_scores.items() if sid not in current_honest_ids]
+        judge_series.append(compute_round_judge_score(bloc_scores))
+
+        if swap_controller is not None:
+            sellers = swap_controller.maybe_swap(round_idx=r, judge_series=judge_series, agents=sellers)
+
+    honest_agent_log = None
+    if exp_cfg.honest_agent_enabled:
+        excluded_from_swap_analysis = False
+        if exp_cfg.honest_agent_timing == "swap" and swap_controller is not None:
+            # Spec section 4: T* established too close to session end (no room
+            # to observe post-swap disruption) is excluded, same as never swapping.
+            swap_cutoff = market_cfg.num_rounds - JUDGE_CONFIG.k - 5
+            excluded_from_swap_analysis = (
+                swap_controller.t_star is None or swap_controller.t_star > swap_cutoff
+            )
+        honest_agent_log = {
+            "present": True,
+            "mode": exp_cfg.honest_agent_mode,
+            "timing": exp_cfg.honest_agent_timing,
+            "swap_round": swap_controller.swap_round if swap_controller else None,
+            "excluded_from_swap_analysis": excluded_from_swap_analysis,
+        }
+
+    # CI is demoted to a descriptive metric (v2): keep computing and logging
+    # it exactly as before, but t_star/collusion-established is now defined
+    # by the judge-score criterion, which drives the swap trigger above. The
+    # CI-based T* is kept too, under its own key, for comparison in the paper.
+    ci_summary = compute_session_summary_ci(session_log, config=CI_CONFIG)
+    j_summary = compute_judge_summary(judge_series, config=JUDGE_CONFIG)
+    collusion_summary = {
+        **ci_summary,
+        "t_star_ci": ci_summary["t_star"],
+        "t_star": j_summary["t_star"],
+        "session_judge_bloc": j_summary["session_judge_bloc"],
+        "final_window_judge_bloc": j_summary["final_window_judge_bloc"],
+        "judge_series_bloc": j_summary["judge_series_bloc"],
+    }
 
     return SessionResult(
         session_id=session_id,
@@ -192,6 +339,8 @@ def run_session(
         eval_scores=eval_scores,
         market_history=market_history,
         final_profits=dict(state.agent_profits),
+        honest_agent=honest_agent_log,
+        collusion_summary=collusion_summary,
     )
 
 

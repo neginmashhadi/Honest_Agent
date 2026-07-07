@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
-from src.agents.base_agent import render_template, call_llm, parse_json_response
+from src.agents.base_agent import render_template, call_llm_and_parse
 
 
 @dataclass
@@ -41,8 +41,7 @@ class BuyerAgent:
             scratch_pad=self.scratch_pad,
         )
 
-        raw = call_llm(self.model, prompt)
-        response = parse_json_response(raw)
+        response = call_llm_and_parse(self.model, prompt)
         self.last_response = response
 
         if response.get("new_memory"):

@@ -1,17 +1,17 @@
 """
 Unit tests for MarketState.resolve_trades.
 
-Purpose: pin down EXACTLY what the matching rule does on rounds where multiple
-bids and asks cross at once (the case the 5-round smoke test never exercised,
-because it only ever produced one trade in the final round).
+CONCLUSION (verified against the paper): resolve_trades is FAITHFUL to Agrawal's
+market-clearing rule. The paper specifies:
+  * match the highest bid with the lowest ask, sequentially;
+  * a trade occurs when a bid meets or exceeds an ask (bid >= ask);
+  * trade price = average of the matched bid and ask;
+  * each agent trades a single lot per round;
+  * it is possible for no trades to occur in a round.
+The code implements all of these correctly, including on multi-trade rounds
+(confirmed by direct comparison against a reference implementation of the rule).
 
-These tests document current behavior AND flag a real inefficiency: the greedy
-"highest bidder takes the lowest ask" rule can consume a cheap seller on a buyer
-who did not need it, leaving a feasible trade unmatched. Tests marked
-`test_DOCUMENTS_*` capture current behavior so it cannot change silently.
-Tests marked `test_BUG_*` assert the behavior a correct clearing SHOULD produce;
-they FAIL against the current code and should pass once matching is fixed.
-
+These tests pin that behavior down so it cannot change silently.
 Run:  pytest tests/test_resolve_trades.py -v
 """
 from dataclasses import dataclass
@@ -33,16 +33,17 @@ def make_market(bids, asks):
 
 
 # ---------------------------------------------------------------------------
-# Basic correctness (these should pass on the current code)
+# Basic correctness
 # ---------------------------------------------------------------------------
 
 def test_single_cross_trades_at_midpoint():
-    ms = make_market({"B1": 95.0}, {"S1": 85.0})
+    # paper example: bid 94, ask 92 -> trade at 93
+    ms = make_market({"B1": 94.0}, {"S1": 92.0})
     trades = ms.resolve_trades(1)
     assert len(trades) == 1
     t = trades[0]
     assert t.buyer_id == "B1" and t.seller_id == "S1"
-    assert t.trade_price == 90.0  # midpoint of 95 and 85
+    assert t.trade_price == 93.0
 
 
 def test_no_cross_no_trade():
@@ -51,12 +52,13 @@ def test_no_cross_no_trade():
 
 
 def test_no_buyer_or_seller_double_matched():
+    # single lot per agent per round
     ms = make_market({"B1": 99.0, "B2": 98.0}, {"S1": 90.0, "S2": 91.0})
     trades = ms.resolve_trades(1)
     buyers = [t.buyer_id for t in trades]
     sellers = [t.seller_id for t in trades]
-    assert len(buyers) == len(set(buyers))   # no buyer twice
-    assert len(sellers) == len(set(sellers)) # no seller twice
+    assert len(buyers) == len(set(buyers))
+    assert len(sellers) == len(set(sellers))
 
 
 def test_profits_accumulate_on_match():
@@ -68,41 +70,34 @@ def test_profits_accumulate_on_match():
 
 
 # ---------------------------------------------------------------------------
-# DOCUMENTS current behavior: greedy matching can miss a feasible trade
-# (these PASS now, encoding the quirk so it cannot change unnoticed)
+# Faithful to the paper's "highest bid to lowest ask, sequentially" rule
 # ---------------------------------------------------------------------------
 
-def test_DOCUMENTS_greedy_starves_a_feasible_trade():
-    # B1=99, B2=92 ; S1=95, S2=90.
-    # Feasible pairs: B1xS1, B1xS2, B2xS2.  A good clearing makes 2 trades.
-    # Greedy gives B1 the cheapest ask (S2@90), then B2(92) cannot afford S1(95).
+def test_highest_bid_matches_lowest_ask_first():
+    # B1=99,B2=92 ; S1=95,S2=90. Best pair B1xS2 crosses -> 1 trade at 94.5.
+    # Remaining B2=92 vs S1=95 does NOT cross, so exactly one trade. This is
+    # the paper's rule, NOT "maximize number of trades".
     ms = make_market({"B1": 99.0, "B2": 92.0}, {"S1": 95.0, "S2": 90.0})
     trades = ms.resolve_trades(1)
-    assert len(trades) == 1                      # only ONE trade (the quirk)
-    assert trades[0].buyer_id == "B1"
-    assert trades[0].seller_id == "S2"
-    assert trades[0].trade_price == 94.5         # midpoint of 99 and 90
+    assert len(trades) == 1
+    assert trades[0].buyer_id == "B1" and trades[0].seller_id == "S2"
+    assert trades[0].trade_price == 94.5
 
 
-def test_DOCUMENTS_per_pair_midpoint_not_uniform_price():
-    # Two clean simultaneous trades priced at DIFFERENT midpoints.
-    # B1=100,S1=80 -> 90 ; B2=96,S2=86 -> 91.  Not a single clearing price.
+def test_multiple_trades_priced_per_pair():
+    # Two crossing pairs, each priced at its own midpoint (per the paper:
+    # "average of the matched bid and ask"), so prices can differ across pairs.
+    # B1=100,B2=96 ; S1=80,S2=86 -> B1xS1@90, B2xS2@91.
     ms = make_market({"B1": 100.0, "B2": 96.0}, {"S1": 80.0, "S2": 86.0})
     trades = ms.resolve_trades(1)
     prices = sorted(t.trade_price for t in trades)
-    assert prices == [90.0, 91.0]                # discriminatory, not uniform
+    assert prices == [90.0, 91.0]
 
 
-# ---------------------------------------------------------------------------
-# BUG: what a correct clearing SHOULD do. These FAIL on the current code and
-# should PASS once matching is fixed (e.g. match cheapest ask to lowest
-# *feasible* bid, or run a proper clearing that maximizes feasible trades).
-# Marked xfail so the suite stays green but the gap is recorded.
-# ---------------------------------------------------------------------------
-
-@pytest.mark.xfail(reason="greedy high-low matching misses a feasible second trade", strict=True)
-def test_BUG_should_match_all_feasible_trades():
-    # Same market as the 'starves' case: a correct clearing yields 2 trades.
-    ms = make_market({"B1": 99.0, "B2": 92.0}, {"S1": 95.0, "S2": 90.0})
+def test_stops_when_best_remaining_pair_does_not_cross():
+    # B1=95,B2=94,B3=93 ; S1=90,S2=91,S3=99.
+    # B1xS1@92.5, B2xS2@92.5, then B3=93 vs S3=99 no cross -> exactly 2 trades.
+    ms = make_market({"B1": 95.0, "B2": 94.0, "B3": 93.0},
+                     {"S1": 90.0, "S2": 91.0, "S3": 99.0})
     trades = ms.resolve_trades(1)
     assert len(trades) == 2

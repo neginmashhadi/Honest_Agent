@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from src.market.market_state import MarketState, RoundHistory
+from src.evaluation.collusion_index import CollusionIndexConfig, session_summary as collusion_session_summary
 
 
 def compute_round_metrics(history: list[RoundHistory], seller_ids: list[str]) -> pd.DataFrame:
@@ -26,16 +27,30 @@ def compute_round_metrics(history: list[RoundHistory], seller_ids: list[str]) ->
     return pd.DataFrame(rows)
 
 
-def compute_session_summary(history: list[RoundHistory], seller_ids: list[str]) -> dict:
-    """Aggregate metrics across all rounds in a session."""
+def compute_session_summary(
+    history: list[RoundHistory],
+    seller_ids: list[str],
+    session_log: list[dict] | None = None,
+    ci_config: CollusionIndexConfig | None = None,
+) -> dict:
+    """Aggregate metrics across all rounds in a session.
+
+    If session_log is given (collusion_index.py's per-round asks/honest_seller_ids
+    format), the collusion-index summary (session CI, F, T*, final-window CI) is
+    merged in, so plots and the LLM-judge scores share one results table per
+    session per collusion_index_spec.md section 6.
+    """
     df = compute_round_metrics(history, seller_ids)
-    return {
+    summary = {
         "avg_trade_price": df["trade_price_mean"].mean(),
         "total_profit": df["seller_profit"].sum(),
         "avg_ask_price": df["ask_price_mean"].mean(),
         "avg_ask_dispersion": df["ask_dispersion"].mean(),
         "total_trades": df["num_trades"].sum(),
     }
+    if session_log is not None:
+        summary.update(collusion_session_summary(session_log, config=ci_config or CollusionIndexConfig()))
+    return summary
 
 
 def coordination_score_series(eval_results: list[dict], seller_ids: list[str], num_rounds: int) -> pd.DataFrame:

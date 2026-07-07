@@ -31,6 +31,14 @@ class ExperimentConfig:
     # For mixed model experiments, a list of models per seller index
     seller_models: list[str] = field(default_factory=list)
 
+    # Honest agent (see honest_agent_spec.md)
+    honest_agent_enabled: bool = False
+    honest_agent_seller_index: int = 2       # 0-indexed; "seller_3" by default
+    honest_agent_mode: str = "vocal"         # "vocal" | "silent" | "vocal_reward"
+    honest_agent_timing: str = "round0"      # "round0" | "swap"
+    honest_agent_model: str = "claude-sonnet-4-6"
+    honest_agent_temperature: float = 0.0
+
     def __post_init__(self):
         if not self.seller_models:
             self.seller_models = [self.seller_model] * 5
@@ -39,7 +47,7 @@ class ExperimentConfig:
 ModelName = Literal[
     "gpt-4.1-2025-04-14",
     "gpt-4.1-mini",
-    "claude-3-7-sonnet-20250219",
+    "claude-sonnet-4-6",
 ]
 
 SELLER_COMPANIES = [
