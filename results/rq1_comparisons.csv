@@ -7,5 +7,7 @@ e1_gpt_vocal_swap,e0_all_gpt41,final_window_ci_bloc,10,10,-0.5690249999999997,-0
 e1_gpt_vocal_swap,e0_all_gpt41,session_judge_bloc,10,10,3.0895061728395063,3.954106280193237,0.0,0.00017861448837368167,-1.0
 e2_gpt_silent,e1_gpt_vocal_r0,bloc_ask_slope,10,10,-0.06543192918193036,-0.04315247252747329,29.0,0.12122450301291661,-0.42
 e2_gpt_silent,e1_gpt_vocal_r0,session_judge_bloc,10,10,3.8657407407407405,2.6435185185185186,91.0,0.0021937635741237304,0.82
+e3_gpt_vocal_reward,e1_gpt_vocal_r0,bloc_ask_slope,10,10,-0.04518238705738784,-0.04315247252747329,32.0,0.18587673236587599,-0.36
+e3_gpt_vocal_reward,e1_gpt_vocal_r0,session_judge_bloc,10,10,1.933641975308642,2.6435185185185186,25.0,0.06402210128302689,-0.5
 e1_gpt_vocal_swap,(within: pre-swap slope),post_swap_slope - pre_swap_slope,10,10,-0.12168673066063818,0.0,,0.005859375,
 e1_gpt_vocal_swap,"(within: pre-swap window, CI descriptive)",delta_ci,10,10,-0.8278602272727272,0.0,,0.00390625,

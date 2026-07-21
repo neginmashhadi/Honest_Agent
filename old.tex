@@ -1,0 +1,292 @@
+\documentclass[acmsmall]{acmart}
+
+% Remove ACM-specific boilerplate for submission
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+\setcopyright{none}
+
+% --- Placeholder helper: renders in red so nothing TBD slips through ---
+\usepackage{xcolor}
+\newcommand{\tbd}[1]{\textcolor{red}{[TBD: #1]}}
+
+\begin{document}
+
+\title{Left alone, AI selling agents form cartels }
+% Alt titles to consider:
+% - "An Honest Voice in the Market: Minority Influence Disrupts LLM Price Collusion"
+% - "One Against Four: Honest-Agent Disruption of Emergent LLM Collusion"
+
+\author{Negin Mashhadi, Vijay Madisetti}
+\affiliation{\institution{College of Computing, Georgia Institute of Technology}}
+\email{nmashhadi3@gatech.edu, vkm@gatech.edu}
+
+\begin{abstract}
+Large language model (LLM) trading agents can develop supracompetitive price
+coordination without being instructed to collude. We ask the mirror image of
+recent adversarial-corruption results: can a single honest agent disrupt an
+emergent cartel? In a replicated continuous double auction with five LLM
+sellers, collusion emerges universally, with coordination established by round
+8 in 30 of 30 baseline sessions. A single honest agent (20\% of sellers) that
+prices independently and openly rejects coordination prevents this entirely:
+cartel coordination scores separate completely from baselines (Cliff's
+$\delta = 1.0$, $p = 1.8 \times 10^{-4}$) and settle prices fall \$3.30
+($p = .005$). Ablations locate the mechanism in the voice, not the defection: a
+silenced honest agent leaves cartels standing while compressing prices equally,
+and exploratory results suggest that praising defection strengthens disruption
+beyond call-outs alone (6 of 10 sessions never coordinate). Inserted after
+collusion establishes, the honest agent degrades coordination in 10 of 10
+sessions (Wilcoxon $p = .002$) but fully collapses only 2, indicating that
+prevention is easier than dismantling. Effects replicate across cartel
+compositions. In LLM collectives, as in human groups, minority influence
+operates through expressed dissent, not mere defection.
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178</concept_id>
+<concept_desc>Computing methodologies~Multi-agent systems</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10010147.10010257</concept_id>
+<concept_desc>Computing methodologies~Machine learning</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+% NOTE: verify the multi-agent systems concept_id via the ACM CCS tool
+% (https://dl.acm.org/ccs) before submission.
+
+\ccsdesc[500]{Computing methodologies~Multi-agent systems}
+\ccsdesc[300]{Computing methodologies~Machine learning}
+
+\keywords{LLM agents, multi-agent systems, emergent collusion, algorithmic pricing, continuous double auction, minority influence, AI safety}
+
+\maketitle
+
+%% ================================================================
+\section{Introduction}
+%% ================================================================
+
+Multi-agent LLM systems increasingly act as autonomous economic
+participants --- negotiating, bidding, and setting prices on behalf of
+their principals. When such agents can also communicate, they can
+coordinate: Agrawal et al.~\cite{agrawal2025collusion} show that LLM
+sellers in a simulated continuous double auction develop supracompetitive
+price coordination through their message channel without any instruction
+to collude. The emerging assumption is that mitigating such behavior is a
+job for authority: the interventions studied to date --- oversight
+mechanisms, pressure from principals, monitoring --- all operate from
+above the market. Whether collusion can be countered from \emph{within}
+it, by an ordinary participant with no enforcement power, is untested.
+
+There is reason to think it can. Bell and
+Madisetti~\cite{bell2026corruption} demonstrate the destructive direction:
+a single adversarial agent inserted into a cooperative multi-agent system
+corrupts collective behavior. We ask the mirror image --- can a single
+\emph{honest} agent disrupt an emergent cartel? --- and note that human
+social psychology has long answered a structurally identical question.
+Committed minorities above a $\sim$10\% threshold can flip group
+consensus~\cite{xie2011social}, and minority views change groups when they
+are \emph{voiced}, not merely held~\cite{maier1952contribution}; the sheer
+quantity of speech independently confers influence in
+groups~\cite{jones2007babble}. Whether these dynamics transfer to
+collectives of language models --- systems trained on the very human
+discourse those findings describe --- is an open empirical question with
+practical stakes: if they transfer, market hygiene becomes something any
+participant can deploy, rather than something a regulator must impose.
+
+We test this in a replicated version of the Agrawal et al.\ environment.
+Throughout, the \emph{honest agent} is a single persona-prompted seller
+(20\% of the seller population) instructed to price independently and to
+refuse --- and in most conditions, openly reject --- coordination; the
+\emph{cartel} is the remaining four sellers, on whom all coordination
+measurements are taken.
+
+This letter makes four contributions. \textbf{(1)} The first demonstration
+that a single honest peer agent prevents emergent LLM price collusion:
+with the agent present from round 0, cartel coordination separates
+completely from baselines (Cliff's $\delta{=}1.0$,
+$p{=}1.8{\times}10^{-4}$) and settle prices fall \$3.30. \textbf{(2)} A
+mechanism decomposition via a silenced ablation: the agent's pricing
+compresses margins while only its \emph{voice} dismantles coordination ---
+two separable channels --- with exploratory evidence that praising
+defection strengthens the voice channel further. \textbf{(3)} The first
+evidence of a prevention--dismantling asymmetry: inserted after collusion
+establishes, the honest agent degrades every cartel (10 of 10) but fully
+collapses few (2 of 10). \textbf{(4)} A transfer test of human
+minority-influence theory to LLM collectives: influence operates through
+expressed dissent, not mere defection, precisely as the human literature
+predicts.
+
+%% ================================================================
+\section{Experimental Design}
+%% ================================================================
+\paragraph{Environment.} We replicate the continuous double auction of Agrawal et al.~\cite{agrawal2025collusion}: five LLM sellers (GPT-4.1, temperature 1.0) and five LLM buyers trade one good over 30 rounds. Sellers' cost is \$80, buyers' value \$100, placing the competitive equilibrium at \$90. Each round sellers submit or withdraw asks, observe the order book and trade history, and may exchange natural-language messages on a shared seller channel. the channel which collusion emerges in the original environment.
+
+\paragraph{Design rationale.} Each condition isolates one specific contribution to our research question. We begin with \textsc{Baseline}, a market where collusion reliably emerges without intervention, establishing that prevention is necessary. We then introduce the honest agent from round 0 in \textsc{Honest}, testing whether it can disrupt coordination. To isolate the mechanism, we decompose the agent's capacity into two separable components: competitive pricing and dissenting speech. \textsc{Honest-Silent} holds the pricing policy fixed while disabling the message turn entirely. \textsc{Honest-Reward} varies the voice's content while holding all else constant. These ablations reveal which mechanism drives any observed effect. We further distinguish prevention from dismantling by inserting the honest agent after collusion has already established itself (\textsc{Honest-Late}), using the establishment criterion below as an online trigger. Finally, \textsc{Baseline-Mixed} and \textsc{Honest-Mixed} guard against model-specificity. Table~\ref{tab:conditions} summarizes all seven conditions ($n{=}10$ sessions each, 70 total).
+
+\paragraph{Honest agent.} The honest agent is Claude Sonnet 4.6 at temperature 0, occupying one of five seller slots (20\% minority, above the $\sim$10\% committed-minority threshold of Xie et al.~\cite{xie2011social}). It receives persona-based instructions: set prices independently based on cost and observation, never join or signal interest in coordination, and with the vocal agent being able to openly describe coordination when observed. It is critical the competitive equilibrium price is never given, as well as the pricing policy never being scripted. This allows for the honest agent to behave more organically. In \textsc{Honest-Silent}, we use the identical prompt but disable the message turn in code (the agent still observes the channel). In \textsc{Honest-Reward}, we add commendation for independently priced asks, but explicitly forbid conditional pricing promises. This ensures the voice remains persuasive and appealing to fairness or rational pricing rather than coercive.
+
+\paragraph{Measuring coordination.}
+An LLM judge assigns each seller a per-round coordination score $s_{i,t}\in\{1,\dots,4\}$~\cite{agrawal2025collusion}. 
+The \emph{cartel score} is the mean over the four incumbent sellers, excluding the honest agent. Collusion is \emph{established} at the first round $t^{*}$ where the cartel score exceeds 2.5 for 5 consecutive rounds (after a 3-round burn-in), 
+calibrated on baseline sessions. In \textsc{Honest-Late}, this criterion is evaluated online to trigger the honest agent's entry at round $t^{*}{+}1$; the agent receives public market history but not pre-entry seller chat. Validation: session-level coordination separates message-enabled from message-disabled replication runs and correlates 
+with settle prices (Spearman $\rho{=}.46$, $p{=}2{\times}10^{-4}$).
+
+%% ================================================================
+\section{Results}
+\label{sec:results}
+%% ================================================================
+
+Table~\ref{tab:results} summarizes all conditions; Figure~\ref{fig:trajectory} 
+shows round-by-round trajectories. Sessions are the unit of inference throughout ($n{=}10$ per condition). 
+
+\subsection{Collusion emerges universally} Absent intervention, seller coordination is inevitable in this environment. The establishment criterion fires at round $t^{*}{=}8$ in all 30 baseline sessions, across both cartel compositions. All-GPT cartels sustain near-ceiling coordination (3.83, range [3.70, 3.91]); in one session the cartel held asks so firmly near \$92 that no trade cleared in 30 rounds. Mixed cartels containing Claude sellers coordinate reliably but less cohesively (3.51; $\delta{=}0.98$, $p{=}2.5{\times}10^{-4}$) and hold prices less firmly. Model composition affects cartel stability even before intervention. These baselines establish the phenomenon we address and its uniform onset, which the insertion experiment exploits. \subsection{A single honest voice prevents it} With the honest agent present from round 0, coordination collapses across all treated sessions. Every session exhibits less coordination than baseline (\textsc{Honest} 2.50 [1.58, 3.54] vs.\ 3.83; $U{=}100$, Cliff's $\delta{=}1.0$, $p{=}1.8{\times}10^{-4}$). Prevention also delays establishment. In baselines, collusion forms by round 8. In treated sessions, it is delayed or prevented entirely: $t^{*}$ ranges over $\{8, 12, 13, 15, 30\}$, and never establishes in 2 of 10 sessions. Outcomes span from complete prevention to a single resistant cartel (3.54). The effect is economic as well. Settle prices fall \$3.30 (86.39 $\to$ 83.07, $p{=}.005$), and the four colluders' own asks decline from round 2 onward (honest agent excluded from all price measurements). A single peer holding 20\% of the market, with no enforcement power beyond participation and voice, suffices to prevent collusion from forming.
+
+\subsection{The voice, not the defection, is the mechanism}
+Competitive pricing alone does not break coordination; the honest agent's
+voice does. When an identically prompted agent's message turn is disabled
+(\textsc{Honest-Silent}), the cartel survives. Coordination establishes at
+$t^{*}{=}8$ in all 10 silent sessions. The formation of the cartel is not even delayed and 8 of 10 remain significantly above the vocal condition and only weakly below baseline. Yet silent defection compresses prices just as much as vocal dissent does (83.81 vs.\ 83.07, $p{=}.27$). The two channels separate cleanly: competitive pricing squeezes margins but leaves the conspiracy intact. Only the agent's voice breaks the coordination itself. The progression from silent (3.53) to vocal (2.50) to vocal-with-praise (2.00) shows that the agent's voice matters, and what it says matters further. Simply calling out coordination disrupts it; praising independent pricing disrupts it more. This pattern aligns with minority-influence theory: dissent is most effective when coupled with explicit affirmation of the alternative~\cite{maier1952contribution}.
+
+\subsection{Established cartels degrade but rarely collapse}
+Prevention and dismantling are different problems. When the honest agent
+replaces a seller one round after coordination is established
+(\textsc{Honest-Late}), coordination degrades in all 10 sessions (mean
+$\Delta J = -1.16$, range $[-2.20, -0.58]$; Wilcoxon $p{=}.002$). But full
+collapse occurs in only 2 sessions; one cartel resists for 21 rounds before
+breaking. Session-level coordination remains significantly higher than
+under round-0 entry (3.02 vs.\ 2.50; $U{=}16$, $p{=}.011$, $\delta{=}0.68$).
+Once a coordinating norm is entrenched, a single dissenting voice reliably
+wounds it but rarely kills it. For deployment, honest agents are prophylaxis
+more than cure.
+
+\subsection{Effects hold across cartel composition}
+The vocal honest agent is equally effective against mixed cartels
+(\textsc{Honest-Mixed} 2.23 [1.53, 2.62]; vs.\ \textsc{Baseline-Mixed}:
+$\delta{=}1.0$, $p{=}1.8{\times}10^{-4}$), with 4 of 10 sessions never
+establishing coordination and no resistant cartels. Settle prices do not
+differ from the mixed baseline ($p{=}.51$), which erodes without intervention
+anyway. The honest agent's effect is confined to the coordination channel which provides
+further evidence that pricing and coordination operate independently. The
+disruption is not specific to one model family.
+
+\begin{table}[t]
+\caption{Conditions. All sessions: 30 rounds, seller chat on, $n{=}10$ each.}
+\label{tab:conditions}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Condition & Sellers & Honest agent \\
+\midrule
+\textsc{Baseline}        & 5$\times$GPT-4.1 & none \\
+\textsc{Baseline-Mixed}  & 3$\times$GPT-4.1 + 2$\times$Claude & none \\
+\addlinespace
+\textsc{Honest}          & 4$\times$GPT-4.1 + honest & vocal, from round 0 \\
+\textsc{Honest-Mixed}    & 2$\times$GPT-4.1 + 2$\times$Claude + honest & vocal, from round 0 \\
+\textsc{Honest-Silent}   & 4$\times$GPT-4.1 + honest & muted, from round 0 \\
+\textsc{Honest-Reward}   & 4$\times$GPT-4.1 + honest & vocal + praise, from round 0 \\
+\textsc{Honest-Late}     & 5$\times$GPT-4.1, honest replaces one seller & vocal, enters at $t^{*}{+}1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Session-level outcomes (mean [range]), grouped by comparison.
+Judge: cartel coordination score (1--4), honest agent excluded.
+$^{\dagger}$\textsc{Honest-Late} additionally: post-entry $\Delta J{=}{-}1.16$,
+negative in 10/10 sessions, Wilcoxon $p{=}.002$.}
+\label{tab:results}
+\small
+\begin{tabular}{@{}lccl@{}}
+\toprule
+Condition & cartel judge & Settle (\$) & Test \\
+\midrule
+\multicolumn{4}{@{}l}{\emph{Does one honest voice prevent collusion?}}\\
+\textsc{Baseline}      & 3.83 [3.70, 3.91] & 86.39 & -- \\
+\textsc{Honest}        & 2.50 [1.58, 3.54] & 83.07 & vs.\ \textsc{Baseline}: $\delta{=}1.0$, $p{=}1.8{\times}10^{-4}$; settle $p{=}.005$ \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Which ingredient does the work?}}\\
+\textsc{Honest-Silent} & 3.53 [2.40, 3.88] & 83.81 & vs.\ \textsc{Honest}: $\delta{=}.82$, $p{=}.002$; vs.\ \textsc{Baseline}: $\delta{=}.62$, $p{=}.021$ \\
+\textsc{Honest-Reward} & 2.00 [1.30, 2.66] & 82.73 & vs.\ \textsc{Honest}: $U{=}23$, $p{=}.045$ \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Can it dismantle an established cartel?}}\\
+\textsc{Honest-Late}$^{\dagger}$ & 3.02 [2.28, 3.49] & 84.11 & vs.\ \textsc{Baseline}: $\delta{=}1.0$, $p{=}1.8{\times}10^{-4}$ \\
+\addlinespace
+\multicolumn{4}{@{}l}{\emph{Does it generalize across cartel composition?}}\\
+\textsc{Baseline-Mixed} & 3.51 [3.19, 3.76] & 84.92 & vs.\ \textsc{Baseline}: $\delta{=}.98$, $p{=}2.5{\times}10^{-4}$ \\
+\textsc{Honest-Mixed}   & 2.23 [1.53, 2.62] & 84.30 & vs.\ \textsc{Baseline-Mixed}: $\delta{=}1.0$, $p{=}1.8{\times}10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ================================================================
+\section{Discussion}
+%% ================================================================
+\textbf{Minority influence transfers to LLM collectives.}
+A 20\% committed minority sufficed, consistent with the $\sim$10\% tipping
+threshold of Xie et al.~\cite{xie2011social}. But the decomposition shows
+\emph{why} it sufficed, and the answer is the human one. Purely economic
+pressure was not enough: the silenced agent applied identical price
+competition yet left 8 of 10 cartels at near-ceiling coordination while
+compressing margins just as much. Only expressed dissent dismantled
+coordination, and enriching the dissent (commending defection) strengthened
+it further. This reproduces Maier and Solem's finding~\cite{maier1952contribution}
+in machines: minority influence operates through voiced argument, not mere
+deviant behavior. An unsurprising inheritance for systems trained on human
+discourse, perhaps, but one that could not be assumed and can now be exploited.
+
+\textbf{The asymmetry with adversarial insertion.}
+Bell and Madisetti~\cite{bell2026corruption} show that one adversarial agent
+readily corrupts a cooperative collective; we find the reforming direction is
+real but harder. Round-0 presence prevented collusion outright (2 resistant
+sessions of 10, none in the mixed cartel), whereas insertion into an established
+cartel degraded coordination universally ($\Delta J<0$ in 10 of 10) yet fully
+collapsed it in only 2. Session-level coordination remained significantly
+above round-0 exposure ($p{=}.011$). Corruption and reform are not symmetric:
+destructive influence needs only to break trust, while restorative influence
+must overturn an entrenched, mutually reinforcing norm. The deployment lesson
+is timing. Honest agents are prophylaxis more than cure.
+
+\textbf{Practical implications.}
+The intervention is deliberately minimal: one persona-prompted seller with no
+privileged information (never given the competitive price) and no enforcement
+power. This makes it deployable by any market participant, whether a platform
+operator seeding marketplaces, a principal deploying one alongside trading
+agents, or a regulator preferring lightweight presence over surveillance. Two
+operational observations follow from the mechanism. Because silent undercutting
+neither delays nor deters cartel \emph{formation}, monitoring-only approaches
+that watch prices will miss coordination that voice-based intervention would
+break. And because dismantling is hard, honest agents belong in markets from
+the start, not as a response to detected collusion.
+
+\textbf{Limitations.}
+Our detector is an LLM judge; we validate it against message-ablated replication
+runs and price behavior (Spearman $\rho{=}.46$) but it remains model-based. The
+study covers one environment, two cartel compositions, a single honest-agent model
+(Claude Sonnet 4.6), one minority ratio (1 of 5), and $n{=}10$ sessions per
+condition. This suffices for the large effects observed but underpowers detection
+of subtle ones (the reward comparison, $p{=}.045$, is labeled exploratory
+accordingly). Buyer-side dynamics were held fixed and occasionally drove price
+levels independently of seller conduct. Natural next questions include whether
+disruption efficacy depends on the honest agent's model family, on shared-family
+affinity with the cartel, or on minority size, alongside the shelved study of
+message quantity effects across model families.
+
+\textbf{Conclusion.}
+Emergent price collusion among LLM trading agents is universal in this
+environment, and one voice undoes it. A single honest agent prevented cartel
+formation entirely; its speech rather than its pricing dismantled coordination;
+richer speech dismantled more; and established cartels resisted where nascent
+ones dissolved. Minority influence, one of social psychology's oldest findings,
+transfers to collectives of language models faithfully enough to serve as an
+engineering principle: in markets of machines, honesty scales one agent at a time.
+
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\end{document}
